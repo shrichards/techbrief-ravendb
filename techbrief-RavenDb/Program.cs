@@ -337,22 +337,14 @@ namespace techbrief_RavenDb
         public double TotalSaleCost { get; set; } 
     }
 
-    public class ProductTotals_Invoiced : AbstractMultiMapIndexCreationTask<ProductTotals>
+    public class ProductTotals_Invoiced : AbstractIndexCreationTask<Invoice, ProductTotals>
     {
         public ProductTotals_Invoiced()
             : base()
         {
 
-            AddMap<Product>(products => from prod in products
-                                        select new
-                                        {
-                                            ProductId = prod.Id,
-                                            ProductName = prod.Name,
-                                            TotalUnitsSold = 0,
-                                            TotalSaleCost = 0.0
-                                        });
-
-            AddMap<Invoice>(invoices => from inv in invoices
+            
+            Map = invoices => from inv in invoices
                                         from lineItem in inv.LineItems
                                         select new
                                         {
@@ -360,7 +352,7 @@ namespace techbrief_RavenDb
                                             ProductName = lineItem.ProductName,
                                             TotalUnitsSold = lineItem.Quantity,
                                             TotalSaleCost = lineItem.LineItemCost
-                                        });
+                                        };
 
             Reduce = results => from res in results
                                 group res by res.ProductId
