@@ -79,6 +79,7 @@ namespace techbrief_RavenDb
             ravenStore.DatabaseCommands.Delete("Raven/Hilo/products", null);
             ravenStore.DatabaseCommands.Delete("Raven/Hilo/invoices", null);
             ravenStore.DatabaseCommands.Delete("Raven/Hilo/employees", null);
+            ravenStore.DatabaseCommands.Delete("Raven/Hilo/suppliers", null);
 
             ravenStore.DatabaseCommands.DeleteIndex("Products/BySupplierName");
             #endregion
@@ -326,6 +327,46 @@ namespace techbrief_RavenDb
                     .ToList();
             }
             #endregion
+
+            #region Indexes on Entities with dynamic schema
+            using (IDocumentSession session = ravenStore.OpenSession())
+            {
+                var s1 = new Supplier()
+                {
+                    Attributes = new List<SupplierAttribute>()
+                    {
+                        new SupplierAttribute("Name", "Widgets 'r Us"),
+                        new SupplierAttribute("President", "John Jones"),
+                        new SupplierAttribute("Address", "123 Main Street, Beverly Hills, CA 90210")
+                    }
+                };
+                session.Store(s1);
+
+                var s2 = new Supplier()
+                {
+                    Attributes = new List<SupplierAttribute>()
+                    {
+                        new SupplierAttribute("Name", "Whozits 4 U"),
+                        new SupplierAttribute("President", "Mike Miller"),
+                        new SupplierAttribute("Address", "456 Main Street, Springfield, IL 55342"),
+                        new SupplierAttribute("VicePresident", "Sue Sanderson"),
+                    }
+                };
+                session.Store(s2);
+                session.SaveChanges();
+            }
+
+            using (IDocumentSession session = ravenStore.OpenSession())
+            {
+                var suppliersOnMainStreet = session.Advanced.LuceneQuery<Supplier>("Suppliers/ByAttribute")
+                    .Where("Address:*Main?Street*")
+                    .ToList();
+
+                var sueIsVP = session.Advanced.LuceneQuery<Supplier>("Suppliers/ByAttribute")
+                    .WhereEquals("VicePresident", "Sue Sanderson")
+                    .ToList();
+            }
+            #endregion
         }
     }
 
@@ -368,6 +409,39 @@ namespace techbrief_RavenDb
             Index(x => x.ProductId, FieldIndexing.NotAnalyzed);
             Index(x => x.ProductName, FieldIndexing.Analyzed);
             Index(x => x.TotalSaleCost, FieldIndexing.NotAnalyzed);
+        }
+    }
+
+    public class Supplier
+    {
+        public string Id { get; set; }
+        public List<SupplierAttribute> Attributes { get; set; }
+    }
+
+    public class SupplierAttribute
+    {
+        public SupplierAttribute(string key, string value)
+        {
+            Key = key;
+            Value = value;
+        }
+
+        public string Key { get; set; }
+        public string Value { get; set; }
+    }
+
+    public class Suppliers_ByAttribute : AbstractIndexCreationTask<Supplier>
+    {
+        public Suppliers_ByAttribute()
+        {
+            Map = suppliers => from s in suppliers
+                              select new
+                              {
+                                  _ = s.Attributes
+                                     .Select(attribute =>
+                                         // Name, value, stored, analyzed
+                                         CreateField(attribute.Key, attribute.Value, false, true))
+                              };
         }
     }
 }
