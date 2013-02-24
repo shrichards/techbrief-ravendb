@@ -1,6 +1,7 @@
 ﻿using Raven.Abstractions.Data;
 using Raven.Client;
 using Raven.Client.Document;
+using Raven.Client.Indexes;
 using System;
 using System.Collections.Generic;
 using System.Dynamic;
@@ -12,6 +13,10 @@ namespace techbrief_RavenDb
 {
      public class Invoice
     {
+         public Invoice()
+         {
+             DateUtc = DateTime.UtcNow;
+         }
         public DateTime DateUtc { get; set; }
         public List<LineItem> LineItems {get; set; }
     }
@@ -74,6 +79,7 @@ namespace techbrief_RavenDb
             ravenStore.DatabaseCommands.Delete("Raven/Hilo/invoices", null);
             ravenStore.DatabaseCommands.Delete("Raven/Hilo/employees", null);
 
+            ravenStore.DatabaseCommands.DeleteIndex("Products/BySupplierName");
             #endregion
 
             #region Introduction to Storing and Retrieving typed objects
@@ -252,8 +258,118 @@ namespace techbrief_RavenDb
             using (IDocumentSession session = ravenStore.OpenSession())
             {
                 dynamic empl = session.Load<dynamic>("employees/1");
+                session.Delete<dynamic>(empl);
+                session.SaveChanges();
             }
             #endregion
+
+            #region Indexes
+            // Executing a query against a session generates a temporary Dynamic Index.
+            // The first time a query is executed, a Lucene index is created.  This can be an
+            // _expensive_ process, depending on complexity and document volume.
+            // If the same temporary index is queried enough times, Raven will automatically
+            // promote it to a permanent index.
+
+            // Static indexes are defined explicitly and provide far more capability.  Because they're
+            // pre-defined, they can also greatly reduce (or eliminate) the latency encountered
+            // on first query.
+            ravenStore.DatabaseCommands.PutIndex("Products/BySupplierName",
+                new IndexDefinitionBuilder<Product>{
+                    Map = prods => from prod in prods
+                                   select new { SupplierName = prod.SupplierName }
+                });
+
+            using (IDocumentSession session = ravenStore.OpenSession())
+            {
+                var fromWidgets = session.Query<Product>("Products/BySupplierName")
+                                    .Where(x => x.SupplierName == "Widgets 'r Us")
+                                    .ToList();
+            }
+
+            // Can also aggregate data using map/reduce
+            // Add a few more invoices
+            using (IDocumentSession session = ravenStore.OpenSession())
+            {
+                var prods = session.Load<Product>(1, 2).ToList();
+
+                session.Store(
+                    new Invoice()
+                    {
+                        LineItems = new List<LineItem>(){ new LineItem(prods[0], 7), new LineItem(prods[1], 1)}
+                    }
+                );
+
+                session.Store(
+                    new Invoice()
+                    {
+                        LineItems = new List<LineItem>() { new LineItem(prods[0], 11) }
+                    }
+                );
+
+                session.Store(
+                    new Invoice()
+                    {
+                        LineItems = new List<LineItem>() { new LineItem(prods[1], 5) }
+                    }
+                );
+                session.SaveChanges();
+            }
+
+            IndexCreation.CreateIndexes(typeof(InvoicedProductTotals).Assembly, ravenStore);
+            using (IDocumentSession session = ravenStore.OpenSession())
+            {
+
+            }
+            #endregion
+        }
+    }
+
+    public class ProductTotals
+    {
+        public string ProductId { get; set; }
+        public string ProductName{ get; set; }
+        public int TotalUnitsSold{ get; set; }
+        public double TotalSaleCost { get; set; } 
+    }
+
+    public class InvoicedProductTotals : AbstractMultiMapIndexCreationTask<ProductTotals>
+    {
+        public InvoicedProductTotals()
+            : base()
+        {
+            
+            AddMap<Product>(products => from prod in products
+                                        select new
+                                        {
+                                            ProductId = prod.Id,
+                                            ProductName = prod.Name,
+                                            TotalUnitsSold = 0,
+                                            TotalSaleCost = 0.0
+                                        });
+
+            AddMap<Invoice>(invoices => from inv in invoices
+                                        from lineItem in inv.LineItems
+                                        select new
+                                        {
+                                            ProductId = lineItem.ProductId,
+                                            ProductName = lineItem.ProductName,
+                                            TotalUnitsSold = lineItem.Quantity,
+                                            TotalSaleCost = lineItem.LineItemCost
+                                        });
+
+            Reduce = results => from res in results
+                                group res by res.ProductId
+                                    into g
+                                    select new
+                                    {
+                                        ProductId = g.Key,
+                                        ProductName = g.Select(x => x.ProductName).First(),
+                                        TotalUnitsSold = g.Sum(x => x.TotalUnitsSold),
+                                        TotalSaleCost = g.Sum(x => x.TotalSaleCost)
+                                    };
+
+            Index(x => x.ProductId, Raven.Abstractions.Indexing.FieldIndexing.NotAnalyzed);
+            Index(x => x.ProductName, Raven.Abstractions.Indexing.FieldIndexing.Analyzed);
         }
     }
 }
