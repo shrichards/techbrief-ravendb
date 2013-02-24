@@ -8,6 +8,7 @@ using System.Dynamic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Raven.Abstractions.Indexing;
 
 namespace techbrief_RavenDb
 {
@@ -315,10 +316,14 @@ namespace techbrief_RavenDb
                 session.SaveChanges();
             }
 
-            IndexCreation.CreateIndexes(typeof(InvoicedProductTotals).Assembly, ravenStore);
+            IndexCreation.CreateIndexes(typeof(ProductTotals_Invoiced).Assembly, ravenStore);
             using (IDocumentSession session = ravenStore.OpenSession())
             {
+                var totals = session.Query<ProductTotals>("ProductTotals/Invoiced").ToList();
 
+                var bigTotals = session.Query<ProductTotals>("ProductTotals/Invoiced")
+                    .Where(pt => pt.TotalSaleCost > 300.0)
+                    .ToList();
             }
             #endregion
         }
@@ -332,12 +337,12 @@ namespace techbrief_RavenDb
         public double TotalSaleCost { get; set; } 
     }
 
-    public class InvoicedProductTotals : AbstractMultiMapIndexCreationTask<ProductTotals>
+    public class ProductTotals_Invoiced : AbstractMultiMapIndexCreationTask<ProductTotals>
     {
-        public InvoicedProductTotals()
+        public ProductTotals_Invoiced()
             : base()
         {
-            
+
             AddMap<Product>(products => from prod in products
                                         select new
                                         {
@@ -368,8 +373,9 @@ namespace techbrief_RavenDb
                                         TotalSaleCost = g.Sum(x => x.TotalSaleCost)
                                     };
 
-            Index(x => x.ProductId, Raven.Abstractions.Indexing.FieldIndexing.NotAnalyzed);
-            Index(x => x.ProductName, Raven.Abstractions.Indexing.FieldIndexing.Analyzed);
+            Index(x => x.ProductId, FieldIndexing.NotAnalyzed);
+            Index(x => x.ProductName, FieldIndexing.Analyzed);
+            Index(x => x.TotalSaleCost, FieldIndexing.NotAnalyzed);
         }
     }
 }
