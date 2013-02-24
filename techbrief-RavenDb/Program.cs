@@ -9,38 +9,7 @@ using System.Threading.Tasks;
 
 namespace techbrief_RavenDb
 {
-    public class Genre
-    {
-        public string Id { get; set; }
-        public string Name { get; set; }
-        public string Description { get; set; }
-    }
-
-    public class Album
-    {
-        public string Id { get; set; }
-        public string AlbumArtUrl { get; set; }
-        public string Title { get; set; }
-        public int CountSold { get; set; }
-        public double Price { get; set; }
-
-        public AlbumGenre Genre { get; set; }
-        public AlbumArtist Artist { get; set; }
-    }
-
-    public class AlbumGenre
-    {
-        public string Id { get; set; }
-        public string Name { get; set; }
-    }
-
-    public class AlbumArtist
-    {
-        public string Id { get; set; }
-        public string Name { get; set; }
-    }
-
-    public class Invoice
+     public class Invoice
     {
         public DateTime DateUtc { get; set; }
         public List<LineItem> LineItems {get; set; }
@@ -48,25 +17,47 @@ namespace techbrief_RavenDb
 
     public class LineItem
     {
-        public LineItem(string productName, double unitCost, int quantity)
+        public LineItem()
         {
-            ProductName = productName;
-            Quantity = quantity;
-            UnitCost = unitCost;
-            LineItemCost = Quantity * UnitCost;
+
         }
 
+        public LineItem(Product product, int quantity)
+        {
+            ProductId = product.Id;
+            ProductName = product.Name;
+            ProductUnitCost = product.UnitCost;
+
+            Quantity = quantity;
+            LineItemCost = Quantity * ProductUnitCost;
+        }
+        public string ProductId { get; set; }
         public string ProductName { get; protected set; }
+        public double ProductUnitCost { get; protected set; }
+
         public int Quantity { get; protected set; }
-        public double UnitCost { get; protected set; }
         public double LineItemCost { get; protected set; }
     }
 
+    public class Product
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+        public double UnitCost { get; set; }
+        public int QuantityOnHand { get; set; }
+        public DateTime LastOrderDate { get; set; }
+        public string SupplierName { get; set; }
+        public string WarehouseAddress { get; set; }
+    }
+
+    
     class Program
     {
+        static string databaseName = "invoice-sample";
+
         static void Main(string[] args)
         {
-            IDocumentStore ravenStore = new DocumentStore() { DefaultDatabase = "music-simple", Url = "http://localhost:8080" };
+            IDocumentStore ravenStore = new DocumentStore() { DefaultDatabase = databaseName, Url = "http://localhost:8080" };
             ravenStore.Initialize();
 
             #region Empty Database (Pay no attention to the man behind the curtain)
@@ -78,37 +69,44 @@ namespace techbrief_RavenDb
             }, allowStale: false);
 
             // Delete the hilo docs to reset numbering
-            ravenStore.DatabaseCommands.Delete("Raven/Hilo/genres", null);
-            ravenStore.DatabaseCommands.Delete("Raven/Hilo/albums", null);
-            ravenStore.DatabaseCommands.Delete("Raven/Hilo/artists", null);
+            ravenStore.DatabaseCommands.Delete("Raven/Hilo/products", null);
+            ravenStore.DatabaseCommands.Delete("Raven/Hilo/invoices", null);
+
             #endregion
 
             #region Introduction to Storing and Retrieving typed objects
             // Raven implements the unit of work pattern with IDocumentSession
             using (IDocumentSession session = ravenStore.OpenSession())
             {
-                // Genre has an Id property, but we don't set it (Raven will do it for us)
-                Genre rock = new Genre()
+                // Product has an Id property, but we don't set it (Raven will do it for us)
+                Product widget = new Product()
                 {
-                  Name = "Rock",
-                  Description = "Rock and Roll is a form of rock music developed in the 1950s and 1960s. Rock music combines many kinds of music from the United States, such as country music, folk music, church music, work songs, blues and jazz."
+                    Name = "Widget",
+                    UnitCost = 3.49,
+                    QuantityOnHand = 1000,
+                    SupplierName = "Widgets 'r Us",
+                    LastOrderDate = DateTime.UtcNow.AddDays(-33),
+                    WarehouseAddress = "490 Boston Post Rd, Sudbury, MA"
                 };
 
                 // Passing the object into the session's Store method - you guessed it - stores the document
                 // signatures: Store(dynamic toStore), Store(object toStore)
-                session.Store(rock);
+                session.Store(widget);
 
                 // We can see in the console that we haven't actually communicated with the RavenDb service yet.
                 
-                // What do you think the ID of the Genre we just added is?
+                // What do you think the ID of the Product we just added is?
 
-
-                Genre jazz = new Genre()
+                Product whatzit = new Product()
                 {
-                    Name = "Jazz",
-                    Description = "Jazz is a type of music which was invented in the United States. Jazz music combines African-American music with European music. Some common jazz instruments include the saxophone, trumpet, piano, double bass, and drums."
+                    Name = "Whatzit",
+                    UnitCost = 44.99,
+                    QuantityOnHand = 180,
+                    SupplierName = "House of Whatzits",
+                    LastOrderDate = DateTime.UtcNow.AddDays(-19),
+                    WarehouseAddress = "490 Boston Post Rd, Sudbury, MA"
                 };
-                session.Store(jazz);
+                session.Store(whatzit);
 
                 // We still haven't send any data to the RavenDb service yet.
 
@@ -126,11 +124,11 @@ namespace techbrief_RavenDb
                 // Id can be assigned to any string value.  Can also plug-in custom id generators.
 
                 // Can we load by Id?
-                var loadedRock = session.Load<Genre>("genres/1");
+                var loadedWidget = session.Load<Product>("products/1");
 
-                // Will query return the Genre?
-                var queriedRock = session.Query<Genre>()
-                    .Where(g => g.Name == "Rock")
+                // Will query return the Product?
+                var queriedWidget = session.Query<Product>()
+                    .Where(g => g.Name == "Widget")
                     .FirstOrDefault();
 
          
@@ -147,8 +145,8 @@ namespace techbrief_RavenDb
 
 
                 // Different results once changes have been saved?
-                queriedRock = session.Query<Genre>()
-                    .Where(g => g.Name == "Rock")
+                queriedWidget = session.Query<Product>()
+                    .Where(g => g.Name == "Widget")
                     .FirstOrDefault();
 
                 // Queries are executed against the Lucene indexes that RavenDb maintains.  Even though entities can be loaded immediately after
@@ -160,15 +158,79 @@ namespace techbrief_RavenDb
             #region References
 
             // As a document store, the prefered mechanism is embedding references; simply store a copy of the data with the entity being stored.
-            // Works great for static entities beneath an "aggregate root".  For example, a line item of an invoice -> Invoice is aggregate root, and it
-            // contains many line items. Line items are immutable (cost of an item on an invoice won't change over time), and line items would only be
-            // accessed via the invoice, not directly. No need to have a separate line item document; embed it right in the invoice
+
+            // This works great for unchanging entities beneath an "aggregate root".  For example, a line item of an invoice.  The invoice is the 
+            // aggregate root, and it contains many line items.
+ 
+            // Line items are immutable (cost of an item on an invoice won't change over time), and line items would only be
+            // accessed via the invoice, not directly. No need to have a separate line item document; embed it right in the invoice.
+
             // Convenient, but not always appropriate.  Ex: Referenced data changes frequently; would need to update all copies everywhere.
-            
-           
+            // Also, perhaps the aggregate root only requires a subset of the data; perhaps just enough to display on a web page.
+            // A line item is generated for the sale of a product.  Product entities could track a lot of information (supplier, order history,
+            // warehouse location, etc) that an invoice doesn't directly care about.  In this situation, the line item could contain a reference
+            // to the Product, and keep a copy of the product's  Name and Unit Cost.  
+ 
+            // This way, the Invoice has enough information about the product to display the line item, but because it also has the Id reference,
+            // the Product can be loaded if additional details are required.
 
+            using (IDocumentSession session = ravenStore.OpenSession())
+            {
+                var invoice = new Invoice()
+                {
+                    DateUtc = DateTime.UtcNow,
+                    LineItems = new List<LineItem>()
+                };
 
+                // Load all the products
+                var products = session.Load<Product>(1, 2) // Applies conventions for the entity to generate the full id
+                              .ToList();
 
+                // create a line item for each product in this invoice
+                invoice.LineItems.Add(new LineItem(products[0], 11));
+                invoice.LineItems.Add(new LineItem(products[1], 3));
+
+                session.Store(invoice);
+                session.SaveChanges();
+            }
+
+            using (IDocumentSession session = ravenStore.OpenSession())
+            {
+                var invoice = session.Load<Invoice>("invoices/1");
+
+                // Each line-item in the invoice has basic product data, as well as the product id
+                // Using the product ids, we can get the products
+                var prods = new List<Product>();
+                foreach (var lineItem in invoice.LineItems)
+                {
+                    prods.Add(session.Load<Product>(lineItem.ProductId));
+                }
+                
+                // There's that N+1 situation we've been trying to avoid. We can do better
+            }
+
+            using(IDocumentSession session = ravenStore.OpenSession())
+            {
+                var invoice = session.Load<Invoice>("invoices/1");
+
+                var products = session.Load<Product>(invoice.LineItems.Select(li => li.ProductId)).ToList();
+
+                // 2 calls to RavenDb.  No more N+1, but... we can do even better
+            }
+
+            using (IDocumentSession session = ravenStore.OpenSession())
+            {
+                var invoice = session
+                    .Include<Invoice>(i => i.LineItems.Select(li => li.ProductId))
+                    .Load("invoices/1");
+
+                var products = session.Load<Product>(invoice.LineItems.Select(li => li.ProductId)).ToList();
+
+                // Invoice and related products loaded in one remote call
+            }
+
+            // Unlike EF (and other ORMs), there's no concept of a navigation property.  RavenDb forces the dev to explicitly
+            // load related entities.
             #endregion
 
         }
