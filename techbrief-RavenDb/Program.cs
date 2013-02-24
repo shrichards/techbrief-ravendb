@@ -40,6 +40,28 @@ namespace techbrief_RavenDb
         public string Name { get; set; }
     }
 
+    public class Invoice
+    {
+        public DateTime DateUtc { get; set; }
+        public List<LineItem> LineItems {get; set; }
+    }
+
+    public class LineItem
+    {
+        public LineItem(string productName, double unitCost, int quantity)
+        {
+            ProductName = productName;
+            Quantity = quantity;
+            UnitCost = unitCost;
+            LineItemCost = Quantity * UnitCost;
+        }
+
+        public string ProductName { get; protected set; }
+        public int Quantity { get; protected set; }
+        public double UnitCost { get; protected set; }
+        public double LineItemCost { get; protected set; }
+    }
+
     class Program
     {
         static void Main(string[] args)
@@ -47,21 +69,21 @@ namespace techbrief_RavenDb
             IDocumentStore ravenStore = new DocumentStore() { DefaultDatabase = "music-simple", Url = "http://localhost:8080" };
             ravenStore.Initialize();
 
-            using (var session = ravenStore.OpenSession())
+            #region Empty Database (Pay no attention to the man behind the curtain)
+            // delete all existing documents
+            ravenStore.DatabaseCommands.DeleteByIndex("Raven/DocumentsByEntityName",
+            new IndexQuery
             {
-                // delete all existing documents
-                ravenStore.DatabaseCommands.DeleteByIndex("Raven/DocumentsByEntityName",
-                new IndexQuery
-                {
-                    Query = "Tag:*"
-                }, allowStale: false);
+                Query = "Tag:*"
+            }, allowStale: false);
 
-                // Delete the hilo docs to reset numbering
-                ravenStore.DatabaseCommands.Delete("Raven/Hilo/genres", null);
-                ravenStore.DatabaseCommands.Delete("Raven/Hilo/albums", null);
-                ravenStore.DatabaseCommands.Delete("Raven/Hilo/artists", null);
-            }
+            // Delete the hilo docs to reset numbering
+            ravenStore.DatabaseCommands.Delete("Raven/Hilo/genres", null);
+            ravenStore.DatabaseCommands.Delete("Raven/Hilo/albums", null);
+            ravenStore.DatabaseCommands.Delete("Raven/Hilo/artists", null);
+            #endregion
 
+            #region Introduction to Storing and Retrieving typed objects
             // Raven implements the unit of work pattern with IDocumentSession
             using (IDocumentSession session = ravenStore.OpenSession())
             {
@@ -106,14 +128,13 @@ namespace techbrief_RavenDb
                 // Can we load by Id?
                 var loadedRock = session.Load<Genre>("genres/1");
 
-            
                 // Will query return the Genre?
                 var queriedRock = session.Query<Genre>()
                     .Where(g => g.Name == "Rock")
                     .FirstOrDefault();
 
          
-                // SaveChanges makes a single remote call write the batch to the RavenDb service
+                // SaveChanges makes a single remote call write the batch to the RavenDb server
                 session.SaveChanges();
 
 
@@ -130,7 +151,26 @@ namespace techbrief_RavenDb
                     .Where(g => g.Name == "Rock")
                     .FirstOrDefault();
 
+                // Queries are executed against the Lucene indexes that RavenDb maintains.  Even though entities can be loaded immediately after
+                // they've been stored in the session, they won't be included in queries until they've been saved to the RavenDb server.  Promotes
+                // proper unit of work, IMO.
             }
+            #endregion
+
+            #region References
+
+            // As a document store, the prefered mechanism is embedding references; simply store a copy of the data with the entity being stored.
+            // Works great for static entities beneath an "aggregate root".  For example, a line item of an invoice -> Invoice is aggregate root, and it
+            // contains many line items. Line items are immutable (cost of an item on an invoice won't change over time), and line items would only be
+            // accessed via the invoice, not directly. No need to have a separate line item document; embed it right in the invoice
+            // Convenient, but not always appropriate.  Ex: Referenced data changes frequently; would need to update all copies everywhere.
+            
+           
+
+
+
+            #endregion
+
         }
     }
 }
