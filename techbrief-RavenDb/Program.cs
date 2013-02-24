@@ -3,6 +3,7 @@ using Raven.Client;
 using Raven.Client.Document;
 using System;
 using System.Collections.Generic;
+using System.Dynamic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -71,6 +72,7 @@ namespace techbrief_RavenDb
             // Delete the hilo docs to reset numbering
             ravenStore.DatabaseCommands.Delete("Raven/Hilo/products", null);
             ravenStore.DatabaseCommands.Delete("Raven/Hilo/invoices", null);
+            ravenStore.DatabaseCommands.Delete("Raven/Hilo/employees", null);
 
             #endregion
 
@@ -233,6 +235,25 @@ namespace techbrief_RavenDb
             // load related entities.
             #endregion
 
+            #region Dynamic Entities
+
+            using (IDocumentSession session = ravenStore.OpenSession())
+            {
+                // We added a document with Id manual/1 in Raven Studio.
+                dynamic empl = new ExpandoObject();
+                empl.FirstName = "Seth";
+                empl.LastName = "Richards";
+                empl.Id = "employees/1";
+
+                session.Store(empl);
+                session.SaveChanges();
+            }
+
+            using (IDocumentSession session = ravenStore.OpenSession())
+            {
+                dynamic empl = session.Load<dynamic>("employees/1");
+            }
+            #endregion
         }
     }
 }
