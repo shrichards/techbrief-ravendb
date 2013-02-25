@@ -12,51 +12,6 @@ using Raven.Abstractions.Indexing;
 
 namespace techbrief_RavenDb
 {
-     public class Invoice
-    {
-         public Invoice()
-         {
-             DateUtc = DateTime.UtcNow;
-         }
-        public DateTime DateUtc { get; set; }
-        public List<LineItem> LineItems {get; set; }
-    }
-
-    public class LineItem
-    {
-        public LineItem()
-        {
-
-        }
-
-        public LineItem(Product product, int quantity)
-        {
-            ProductId = product.Id;
-            ProductName = product.Name;
-            ProductUnitCost = product.UnitCost;
-
-            Quantity = quantity;
-            LineItemCost = Quantity * ProductUnitCost;
-        }
-        public string ProductId { get; set; }
-        public string ProductName { get; protected set; }
-        public double ProductUnitCost { get; protected set; }
-
-        public int Quantity { get; protected set; }
-        public double LineItemCost { get; protected set; }
-    }
-
-    public class Product
-    {
-        public string Id { get; set; }
-        public string Name { get; set; }
-        public double UnitCost { get; set; }
-        public int QuantityOnHand { get; set; }
-        public DateTime LastOrderDate { get; set; }
-        public string SupplierName { get; set; }
-        public string WarehouseAddress { get; set; }
-    }
-
     
     class Program
     {
@@ -103,10 +58,6 @@ namespace techbrief_RavenDb
                 // signatures: Store(dynamic toStore), Store(object toStore)
                 session.Store(widget);
 
-                // We can see in the console that we haven't actually communicated with the RavenDb service yet.
-                
-                // What do you think the ID of the Product we just added is?
-
                 Product whatzit = new Product()
                 {
                     Name = "Whatzit",
@@ -118,7 +69,14 @@ namespace techbrief_RavenDb
                 };
                 session.Store(whatzit);
 
-                // We still haven't send any data to the RavenDb service yet.
+                // We can see in the console that we haven't actually communicated with the RavenDb service yet.
+
+                // What do you think the ID of the Product we just added is?
+
+
+
+
+
 
                 // By default, RavenDb uses the HiLo algorithm to provide each session with a set of ids that can be freely used.
                 // A new set of Ids is negotiated between the session and the server if a session's batch is expended.
@@ -367,81 +325,6 @@ namespace techbrief_RavenDb
                     .ToList();
             }
             #endregion
-        }
-    }
-
-    public class ProductTotals
-    {
-        public string ProductId { get; set; }
-        public string ProductName{ get; set; }
-        public int TotalUnitsSold{ get; set; }
-        public double TotalSaleCost { get; set; } 
-    }
-
-    public class ProductTotals_Invoiced : AbstractIndexCreationTask<Invoice, ProductTotals>
-    {
-        public ProductTotals_Invoiced()
-            : base()
-        {
-
-            
-            Map = invoices => from inv in invoices
-                                        from lineItem in inv.LineItems
-                                        select new
-                                        {
-                                            ProductId = lineItem.ProductId,
-                                            ProductName = lineItem.ProductName,
-                                            TotalUnitsSold = lineItem.Quantity,
-                                            TotalSaleCost = lineItem.LineItemCost
-                                        };
-
-            Reduce = results => from res in results
-                                group res by res.ProductId
-                                    into g
-                                    select new
-                                    {
-                                        ProductId = g.Key,
-                                        ProductName = g.Select(x => x.ProductName).First(),
-                                        TotalUnitsSold = g.Sum(x => x.TotalUnitsSold),
-                                        TotalSaleCost = g.Sum(x => x.TotalSaleCost)
-                                    };
-
-            Index(x => x.ProductId, FieldIndexing.NotAnalyzed);
-            Index(x => x.ProductName, FieldIndexing.Analyzed);
-            Index(x => x.TotalSaleCost, FieldIndexing.NotAnalyzed);
-        }
-    }
-
-    public class Supplier
-    {
-        public string Id { get; set; }
-        public List<SupplierAttribute> Attributes { get; set; }
-    }
-
-    public class SupplierAttribute
-    {
-        public SupplierAttribute(string key, string value)
-        {
-            Key = key;
-            Value = value;
-        }
-
-        public string Key { get; set; }
-        public string Value { get; set; }
-    }
-
-    public class Suppliers_ByAttribute : AbstractIndexCreationTask<Supplier>
-    {
-        public Suppliers_ByAttribute()
-        {
-            Map = suppliers => from s in suppliers
-                              select new
-                              {
-                                  _ = s.Attributes
-                                     .Select(attribute =>
-                                         // Name, value, stored, analyzed
-                                         CreateField(attribute.Key, attribute.Value, false, true))
-                              };
         }
     }
 }

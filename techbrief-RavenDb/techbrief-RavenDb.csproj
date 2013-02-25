@@ -50,9 +50,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="InvoiceEntities.cs" />
     <Compile Include="MusicStore\Entities.cs" />
+    <Compile Include="ProductTotals_Invoiced.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Suppliers_ByAttribute.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
