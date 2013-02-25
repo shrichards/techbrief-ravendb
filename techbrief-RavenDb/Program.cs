@@ -36,7 +36,10 @@ namespace techbrief_RavenDb
             ravenStore.DatabaseCommands.Delete("Raven/Hilo/employees", null);
             ravenStore.DatabaseCommands.Delete("Raven/Hilo/suppliers", null);
 
+            // Delete indexes
             ravenStore.DatabaseCommands.DeleteIndex("Products/BySupplierName");
+            ravenStore.DatabaseCommands.DeleteIndex("ProductTotals/Invoiced");
+            ravenStore.DatabaseCommands.DeleteIndex("Suppliers/ByAttribute");
             #endregion
 
             #region Introduction to Storing and Retrieving typed objects
